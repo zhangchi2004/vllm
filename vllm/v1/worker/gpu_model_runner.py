@@ -5366,6 +5366,26 @@ class GPUModelRunner(
                     kv_cache_shape = tuple(
                         kv_cache_shape[i] for i in kv_cache_stride_order
                     )
+                    
+                    # Calculate strides for the physical shape
+                    # We assume the first dimension is always the block dimension
+                    # and it is the one that might be padded.
+                    # This assumption holds because we allocate memory as 
+                    # num_blocks * page_size.
+                    dtype_size = get_dtype_size(dtype)
+                    padded_page_size_elements = kv_cache_spec.page_size_bytes // dtype_size
+                    
+                    # Calculate dense strides
+                    strides = [1] * len(kv_cache_shape)
+                    for i in range(len(kv_cache_shape) - 2, -1, -1):
+                        strides[i] = strides[i+1] * kv_cache_shape[i+1]
+                    
+                    # If the calculated page size (strides[0]) is smaller than
+                    # the actual allocated page size (padded_page_size_elements),
+                    # we use the padded size as the stride for the first dimension.
+                    if strides[0] < padded_page_size_elements:
+                        strides[0] = padded_page_size_elements
+
                     # Maintain original KV shape view.
                     inv_order = [
                         kv_cache_stride_order.index(i)
@@ -5374,7 +5394,7 @@ class GPUModelRunner(
                     kv_caches[layer_name] = (
                         kv_cache_raw_tensors[layer_name]
                         .view(dtype)
-                        .view(kv_cache_shape)
+                        .as_strided(size=kv_cache_shape, stride=strides)
                         .permute(*inv_order)
                     )
                 elif isinstance(kv_cache_spec, MambaSpec):
