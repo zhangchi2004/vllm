@@ -735,6 +735,10 @@ class MambaMixer2(MambaBase, CustomOp):
                 # e.g., if mamba_block_size = 512 and chunk_size = 256,
                 # then chunk_stride = 2
                 chunk_stride = max(1, mamba_block_size // chunk_size)
+                # The block_stride is the number of blocks per mamba chunk
+                # e.g., if mamba_block_size = 16 and chunk_size = 256,
+                # then block_stride = 16
+                block_stride = max(1, chunk_size // mamba_block_size)
 
                 # Save state for sequences with more than just final state
                 for seq_idx in range(num_prefills):
@@ -763,6 +767,16 @@ class MambaMixer2(MambaBase, CustomOp):
                         block_idx_first_scheduled_token:block_idx_last_scheduled_token,
                     ]
 
+                    if block_stride > 1:
+                        offset = (
+                            block_stride
+                            - 1
+                            - block_idx_first_scheduled_token.item()
+                        ) % block_stride
+                        cache_blocks_to_fill = cache_blocks_to_fill[
+                            offset::block_stride
+                        ]
+
                     # First chunk index for this sequence
                     if seq_idx == 0:
                         first_chunk = 0
@@ -786,9 +800,10 @@ class MambaMixer2(MambaBase, CustomOp):
                         )
 
                     # Get states to write
+                    num_states_needed = cache_blocks_to_fill.shape[0]
                     from_where = varlen_states[
                         first_aligned_chunk : first_aligned_chunk
-                        + n_blocks_to_fill * chunk_stride : chunk_stride
+                        + num_states_needed * chunk_stride : chunk_stride
                     ]
 
                     # Write the states
