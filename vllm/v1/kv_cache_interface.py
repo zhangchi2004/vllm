@@ -151,6 +151,8 @@ class FullAttentionSpec(AttentionSpec):
         )
         for spec in specs:
             for f in fields(AttentionSpec):
+                if f.name == "page_size_padded":
+                    continue
                 assert getattr(spec, f.name) == getattr(merged_spec, f.name), (
                     "All attention layers in the same KV cache group must have "
                     "the same attention spec."
