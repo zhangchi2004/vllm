@@ -32,10 +32,11 @@ PROMPT = "You are a helpful assistant in recognizes the content of tables in mar
 def test_prefix(llm=None, sampling_params=None, prompts=None):
     start_time = time.time()
 
-    llm.generate(prompts, sampling_params=sampling_params)
+    outputs = llm.generate(prompts, sampling_params=sampling_params)
 
     end_time = time.time()
     print(f"cost time {end_time - start_time}")
+    return outputs, end_time - start_time
 
 
 @dataclasses.dataclass
@@ -189,24 +190,65 @@ def run_sweep(args, llm, tokenizer):
                 detokenize=not args.disable_detokenize,
             )
             
-            # Capture output
+            print(f"Running for num_prompts={num_prompts}, input_length={input_length}, repeat_count={repeat_count}")
+            print(f"Sampled {len(filtered_requests)} requests.")
+            
+            # Run benchmark
+            outputs, duration = test_prefix(llm=llm, prompts=prompts, sampling_params=sampling_params)
+            
+            # Calculate metrics
+            total_requests = len(outputs)
+            total_input_tokens = sum(len(o.prompt_token_ids) for o in outputs)
+            total_output_tokens = sum(sum(len(c.token_ids) for c in o.outputs) for o in outputs)
+            total_cached_tokens = sum(o.num_cached_tokens or 0 for o in outputs)
+            
+            avg_latency = 0
+            avg_ttft = 0
+            if total_requests > 0:
+                latencies = []
+                ttfts = []
+                for o in outputs:
+                    if o.metrics:
+                        arrival = o.metrics.arrival_time
+                        # finished_time might be None if not finished, but generate() waits.
+                        if o.metrics.finished_time:
+                            latencies.append(o.metrics.finished_time - arrival)
+                        if o.metrics.first_token_time:
+                            ttfts.append(o.metrics.first_token_time - arrival)
+                
+                if latencies:
+                    avg_latency = sum(latencies) / len(latencies)
+                if ttfts:
+                    avg_ttft = sum(ttfts) / len(ttfts)
+
+            requests_per_second = total_requests / duration if duration > 0 else 0
+            output_tokens_per_second = total_output_tokens / duration if duration > 0 else 0
+            prefix_cache_hit_rate = total_cached_tokens / total_input_tokens if total_input_tokens > 0 else 0
+
+            # Write to log file
             with open(log_path, 'w') as f:
-                with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
-                    print(f"Running for num_prompts={num_prompts}, input_length={input_length}, repeat_count={repeat_count}")
-                    print(f"Sampled {len(filtered_requests)} requests.")
-                    prompt_lens = [req.prompt_len for req in filtered_requests]
-                    if prompt_lens:
-                        print(f"Average input length: {sum(prompt_lens) / len(prompt_lens)}")
-                        print(f"P50 input length: {sorted(prompt_lens)[len(prompt_lens) // 2]}")
-                        print(f"Min Prompt Length: {min(prompt_lens)}")
-                        print(f"Max Prompt Length: {max(prompt_lens)}")
-                    else:
-                        print("No requests sampled!")
-                        
-                    print("Testing filtered requests")
-                    print("------start generating------")
-                    
-                    test_prefix(llm=llm, prompts=prompts, sampling_params=sampling_params)
+                f.write(f"Command: num_prompts={num_prompts}, input_length={input_length}, repeat_count={repeat_count}\n")
+                f.write(f"Sampled requests: {len(filtered_requests)}\n")
+                
+                prompt_lens = [req.prompt_len for req in filtered_requests]
+                if prompt_lens:
+                    f.write(f"Average input length: {sum(prompt_lens) / len(prompt_lens):.2f}\n")
+                    f.write(f"P50 input length: {sorted(prompt_lens)[len(prompt_lens) // 2]}\n")
+                    f.write(f"Min Prompt Length: {min(prompt_lens)}\n")
+                    f.write(f"Max Prompt Length: {max(prompt_lens)}\n")
+                
+                f.write("-" * 20 + "\n")
+                f.write(f"Duration: {duration:.4f} s\n")
+                f.write(f"Total Requests: {total_requests}\n")
+                f.write(f"Total Input Tokens: {total_input_tokens}\n")
+                f.write(f"Total Output Tokens: {total_output_tokens}\n")
+                f.write(f"Total Cached Tokens: {total_cached_tokens}\n")
+                f.write(f"Prefix Cache Hit Rate: {prefix_cache_hit_rate:.2%}\n")
+                f.write(f"Requests/sec: {requests_per_second:.2f}\n")
+                f.write(f"Output Tokens/sec: {output_tokens_per_second:.2f}\n")
+                f.write(f"Average Latency: {avg_latency:.4f} s\n")
+                f.write(f"Average TTFT: {avg_ttft:.4f} s\n")
+
 
 
 def create_argument_parser():
