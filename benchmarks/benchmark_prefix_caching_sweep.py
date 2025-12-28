@@ -144,14 +144,14 @@ def repeat_and_sort_requests(
 
 def run_sweep(args, llm, tokenizer):
     num_prompts_list = [1, 10, 20, 100, 500]
-    input_length_starts = [0, 100, 200, 400, 600, 800, 1200, 1600, 2400, 3200]
+    input_length_starts = [10, 50, 100, 200, 400, 600, 800, 1200, 1600, 2400, 3200]
     
     results_dir = "benchmarks/vllm-sweep"
     os.makedirs(results_dir, exist_ok=True)
 
     for num_prompts in num_prompts_list:
         for input_length in input_length_starts:
-            input_length_upper = input_length + 100
+            input_length_upper = input_length + 1
             repeat_count = 5000 // num_prompts
             
             log_filename = f"{args.log_prefix}_numprompts_{num_prompts}_inputlen_{input_length}.log"
@@ -211,10 +211,10 @@ def run_sweep(args, llm, tokenizer):
                     if o.metrics:
                         arrival = o.metrics.arrival_time
                         # finished_time might be None if not finished, but generate() waits.
-                        if o.metrics.finished_time:
-                            latencies.append(o.metrics.finished_time - arrival)
-                        if o.metrics.first_token_time:
-                            ttfts.append(o.metrics.first_token_time - arrival)
+                        # if o.metrics.finished_time:
+                        #     latencies.append(o.metrics.finished_time - arrival)
+                        # if o.metrics.first_token_time:
+                        #     ttfts.append(o.metrics.first_token_time - arrival)
                 
                 if latencies:
                     avg_latency = sum(latencies) / len(latencies)

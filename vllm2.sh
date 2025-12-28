@@ -1,7 +1,7 @@
 
 
 for num_prompts in 1 5 10 25 50 100 500; do
-    for input_length in 0 100 200; do
+    for input_length in 0 100 200 400 800 1600; do
         export CUDA_VISIBLE_DEVICES=0,1,2,3
         input_length_upper=$((input_length + 100))
         repeat_count=$((5000 / num_prompts))
@@ -19,7 +19,7 @@ for num_prompts in 1 5 10 25 50 100 500; do
 
   # For num
 for num_prompts in 1 5 10 25 50 100 500; do
-    for input_length in 0 100 200; do
+    for input_length in 0 100 200 400 800 1600; do
         export CUDA_VISIBLE_DEVICES=0,1,2,3
         input_length_upper=$((input_length + 100))
         repeat_count=$((5000 / num_prompts))
@@ -37,7 +37,7 @@ for num_prompts in 1 5 10 25 50 100 500; do
 git switch main
 # For num
 for num_prompts in 1 5 10 25 50 100 500; do
-    for input_length in 0 100 200; do
+    for input_length in 0 100 200 400 800 1600; do
         export CUDA_VISIBLE_DEVICES=0,1,2,3
         input_length_upper=$((input_length + 100))
         repeat_count=$((5000 / num_prompts))
