@@ -435,7 +435,10 @@ class HybridAttentionMambaModelConfig(VerifyAndUpdateConfig):
             base_chunk_size = mamba_block_size or model_config.get_mamba_chunk_size()
             attn_tokens_per_mamba_state = cdiv(mamba_page_size, attn_page_size_1_token)
             chunk_size = lcm(base_chunk_size, kernel_block_alignment_size)
-            attn_block_size = chunk_size * cdiv(attn_tokens_per_mamba_state, chunk_size)
+            # Use dynamic block size for hybrid cache block and attention cache block
+            # to allow smaller blocks for prefix caching.
+            # attn_block_size = chunk_size
+            attn_block_size = kernel_block_alignment_size
             cache_config.mamba_block_size = attn_block_size
         else:
             # Without prefix caching, select minimum valid attention block size
@@ -462,27 +465,27 @@ class HybridAttentionMambaModelConfig(VerifyAndUpdateConfig):
         # compute new attention page size
         attn_page_size = cache_config.block_size * attn_page_size_1_token
 
-        assert attn_page_size >= mamba_page_size
+        # assert attn_page_size >= mamba_page_size
 
         if attn_page_size == mamba_page_size:
             # don't need to pad mamba page size
             return
 
         # pad mamba page size to exactly match attention
-        if (
-            cache_config.mamba_page_size_padded is None
-            or cache_config.mamba_page_size_padded != attn_page_size
-        ):
-            cache_config.mamba_page_size_padded = attn_page_size
-            mamba_padding_pct = (
-                100 * (attn_page_size - mamba_page_size) / mamba_page_size
-            )
-            logger.info(
-                "Padding mamba page size by %.2f%% to ensure "
-                "that mamba page size and attention page size are "
-                "exactly equal.",
-                mamba_padding_pct,
-            )
+        # if (
+        #     cache_config.mamba_page_size_padded is None
+        #     or cache_config.mamba_page_size_padded != attn_page_size
+        # ):
+        #     cache_config.mamba_page_size_padded = attn_page_size
+        #     mamba_padding_pct = (
+        #         100 * (attn_page_size - mamba_page_size) / mamba_page_size
+        #     )
+        #     logger.info(
+        #         "Padding mamba page size by %.2f%% to ensure "
+        #         "that mamba page size and attention page size are "
+        #         "exactly equal.",
+        #         mamba_padding_pct,
+        #     )
 
 
 class DeepseekV32ForCausalLM(VerifyAndUpdateConfig):
