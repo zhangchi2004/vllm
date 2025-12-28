@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
 import copy
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, field, fields, replace
 from math import prod
 
 import torch
@@ -66,9 +66,12 @@ class AttentionSpec(KVCacheSpec):
     num_kv_heads: int
     head_size: int
     dtype: torch.dtype
+    page_size_padded: int | None = field(default=None, kw_only=True)
 
     @property
     def page_size_bytes(self) -> int:
+        if self.page_size_padded is not None:
+            return self.page_size_padded
         return (
             2
             * self.block_size

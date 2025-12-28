@@ -927,6 +927,14 @@ def unify_kv_cache_spec_page_size(
         if layer_spec.page_size_bytes == max_page_size:
             new_kv_cache_spec[layer_name] = layer_spec
         else:
+            # Try padding first if available, to preserve block_size
+            # This is useful for hybrid models where we want small block size
+            # for prefix caching but have large page size requirements (e.g. Mamba).
+            if hasattr(layer_spec, "page_size_padded"):
+                new_spec = replace(layer_spec, page_size_padded=max_page_size)
+                new_kv_cache_spec[layer_name] = new_spec
+                continue
+
             layer_page_size = layer_spec.page_size_bytes
             if max_page_size % layer_page_size != 0:
                 raise NotImplementedError(
