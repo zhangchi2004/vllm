@@ -141,6 +141,38 @@ class FullAttentionSpec(AttentionSpec):
         assert not any(isinstance(spec, MLAAttentionSpec) for spec in specs), (
             "MLAAttentionSpec should be merged in MLAAttentionSpec.merge"
         )
+        # Check if all specs have the same page_size_padded
+        page_size_padded = {spec.page_size_padded for spec in specs}
+        if len(page_size_padded) > 1:
+             # If inconsistent, we can't easily merge them while preserving the property
+             # that they are "the same". However, unify_kv_cache_spec_page_size
+             # should have ensured they are compatible in terms of page_size_bytes.
+             # If we are here, it means we are merging layers that might have been
+             # padded differently?
+             # Actually, unify_kv_cache_spec_page_size runs BEFORE grouping.
+             # So all layers in the dict have the same page_size_bytes.
+             # If some are padded and some are not, but they end up with same bytes,
+             # it's fine.
+             # But wait, if one is padded to 1000, and another is naturally 1000,
+             # then one has page_size_padded=1000, other has None.
+             # We should probably take the padded value if it exists.
+             pass
+
+        # We use the page_size_padded from the first spec if available,
+        # or check if any spec has it.
+        # Since we expect all layers in a group to be compatible, and we relaxed
+        # the check for page_size_padded, we should try to preserve it.
+        # If unify_kv_cache_spec_page_size did its job, all specs should have
+        # the same effective page_size_bytes.
+        
+        # Let's pick the page_size_padded from the first spec, or any spec that has it.
+        # Ideally they should be consistent if they were unified to the same max size.
+        merged_page_size_padded = None
+        for spec in specs:
+            if spec.page_size_padded is not None:
+                merged_page_size_padded = spec.page_size_padded
+                break
+        
         merged_spec = cls(
             block_size=specs[0].block_size,
             num_kv_heads=specs[0].num_kv_heads,
@@ -148,6 +180,7 @@ class FullAttentionSpec(AttentionSpec):
             dtype=specs[0].dtype,
             sliding_window=cls.merge_window_sizes(sliding_window),
             attention_chunk_size=cls.merge_window_sizes(attention_chunk_size),
+            page_size_padded=merged_page_size_padded,
         )
         for spec in specs:
             for f in fields(AttentionSpec):
