@@ -734,7 +734,7 @@ class MambaMixer2(MambaBase, CustomOp):
                 # The chunk_stride is the number of chunks per mamba block
                 # e.g., if mamba_block_size = 512 and chunk_size = 256,
                 # then chunk_stride = 2
-                chunk_stride = mamba_block_size // chunk_size
+                chunk_stride = max(1, mamba_block_size // chunk_size)
 
                 # Save state for sequences with more than just final state
                 for seq_idx in range(num_prefills):
